@@ -1,5 +1,5 @@
 # unlinker_xenon
-Call of Duty 2 XBox 360 FastFile Research
+Call of Duty 2 FastFile Research (Xbox 360)
 
 Work in progress, semi-works at the moment
 
