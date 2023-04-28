@@ -3,7 +3,7 @@ Call of Duty 2 FastFile Research (Xbox 360)
 
 Work in progress, semi-works at the moment
 
-# How to use?
+# How to get fastfiles?
 
 ![image](https://user-images.githubusercontent.com/5922568/235071974-6804cc56-6c65-4bb3-a3fd-799ad7b4dafd.png)
 
