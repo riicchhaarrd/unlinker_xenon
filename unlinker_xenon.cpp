@@ -371,6 +371,7 @@ struct clipMap_t
 	u32 numSubModels;
 	u32 cmodels;
 	u16 numBrushes;
+	char pad0[2];
 	u32 brushes;
 	u32 numClusters;
 	u32 clusterBytes;
@@ -379,7 +380,7 @@ struct clipMap_t
 	u32 numEntityChars;
 	u32 entityString;
 	u32 box_brush;
-	u8 box_model[72];
+	char box_model[72];
 	u32 pathNodeCount;
 	u32 pathNodes;
 	u32 chainNodeCount;
@@ -424,7 +425,8 @@ struct clipMap_t
 		aabbTrees = br.read_u32();
 		numSubModels = br.read_u32();
 		cmodels = br.read_u32();
-		u16 numBrushes;
+		numBrushes = br.read_u16();
+		br.read_u16();//padding
 		brushes = br.read_u32();
 		numClusters = br.read_u32();
 		clusterBytes = br.read_u32();
@@ -456,8 +458,18 @@ struct XModelLodInfo
 	float dist;
 	u32 filename;
 	u16 numsurfs;
+	char pad0[2];
 	u32 surfNames;
 	u32 surfs;
+	void read(BufferReader& br)
+	{
+		dist = br.read_float();
+		filename = br.read_u32();
+		numsurfs = br.read_u16();
+		br.read_u16();//padding
+		surfNames = br.read_u32();
+		surfs = br.read_u32();
+	}
 };
 
 struct XModel
@@ -475,24 +487,90 @@ struct XModel
 	u32 xskins;
 	u32 memUsage;
 	u32 name;
-	u8 flags;
-	u8 bad;
+
+	//not sure whether it's u8,padding,u8
+	u16 flags;
+	u16 bad;
+	void read(BufferReader& br)
+	{
+		parts = br.read_u32();
+		for (int i = 0; i < 4; ++i)
+		{
+			lodInfo[i].read(br);
+		}
+		collSurfs = br.read_u32();
+		numCollSurfs = br.read_u32();
+		contents = br.read_u32();
+		boneInfo = br.read_u32();
+		mins = br.read_vec3();
+		maxs = br.read_vec3();
+		numLods = br.read_u16();
+		collLod = br.read_u16();
+		xskins = br.read_u32();
+		memUsage = br.read_u32();
+		name = br.read_u32();
+		flags = br.read<u16>();
+		bad = br.read<u16>();
+	}
+};
+struct DSkel
+{
+	//not sure if it's u8 or int, lot of \xff values so i don't think it's a float
+	char animPartBits[16];
+	char controlPartBits[16];
+	char skelPartBits[16];
+	char mat[32];
+	void read(BufferReader& br)
+	{
+		for (int i = 0; i < 16; ++i)
+			animPartBits[i] = br.read<u8>();
+		for (int i = 0; i < 16; ++i)
+			controlPartBits[i] = br.read<u8>();
+		for (int i = 0; i < 16; ++i)
+			skelPartBits[i] = br.read<u8>();
+		for (int i = 0; i < 32; ++i)
+			mat[i] = br.read<u8>();
+	}
+};
+struct XModelParts_s
+{
+	u16 numBones;
+	u16 numRootBones;
+	u32 hierarchy;
+	u32 quats;
+	u32 trans;
+	u32 partClassification;
+	DSkel skel;
+	void read(BufferReader& br)
+	{
+		numBones = br.read_u16();
+		numRootBones = br.read_u16();
+		hierarchy = br.read_u32();
+		quats = br.read_u32();
+		trans = br.read_u32();
+		partClassification = br.read_u32();
+		skel.read(br);
+	}
+};
+
+struct cStaticModelWritable
+{
+	u16 nextModelInWorldSector;
 };
 
 struct cStaticModel_s
 {
-	u16 writeable; //cStaticModelWritable? //2
-	char pad[2]; //4
-	u32 xmodel; //8
-	vec3 origin; //20
-	vec3 invAxis[3]; //56
-	vec3 absmin; //68
-	vec3 absmax; //80
+	cStaticModelWritable writable;
+	char pad0[2];
+	u32 xmodel;
+	vec3 origin;
+	vec3 invAxis[3];
+	vec3 absmin;
+	vec3 absmax;
 	void read(BufferReader& br)
 	{
-		writeable = br.read_u16();
-		pad[0] = br.read<u8>();
-		pad[1] = br.read<u8>();
+		writable.nextModelInWorldSector = br.read_u16();
+		br.read_u16();//padding
 		xmodel = br.read_u32();
 		origin = br.read_vec3();
 		invAxis[0] = br.read_vec3();
@@ -500,15 +578,10 @@ struct cStaticModel_s
 		invAxis[2] = br.read_vec3();
 		absmin = br.read_vec3();
 		absmax = br.read_vec3();
-		if (xmodel == UINT_MAX)
-		{
-			printf("MAX at %x\n", br.cursor);
-			getchar();
-		}
 	}
 	void display()
 	{
-		println("writable={}", writeable);
+		println("writable={}", writable.nextModelInWorldSector);
 		println("xmodel={}", xmodel);
 		println("origin={}", origin);
 		println("invAxis[0]={}", invAxis[0]);
@@ -523,8 +596,8 @@ constexpr int sizeof_cStaticModel_s = sizeof(cStaticModel_s);
 
 int main(int argc, char **argv)
 {
-	//const char* path = "F:\\xbox\\New folder\\2\\mp_harbor.ff";
-#if 1
+	const char* path = "F:\\xbox\\extracted\\2\\mp_harbor.ff";
+#if 0
 	if (argc < 2)
 		return 0;
 	const char* path = argv[1];
@@ -547,7 +620,7 @@ int main(int argc, char **argv)
 	printf("compressed %d bytes\n", v.size());
 	printf("uncompressed %d bytes\n", uncomp.size());
 
-	write_file("F:\\export\\dump3.bin", uncomp);
+	//write_file("F:\\export\\dump3.bin", uncomp);
 
 	XAssetList list;
 	BufferReader br(uncomp.data(), uncomp.size());
@@ -635,20 +708,31 @@ int main(int argc, char **argv)
 		{
 			clipMap_t cm;
 			cm.read(br);
-			br.read_u32(); //IDK??? extra field on clipMap? or begin header for the staticModels?? pointer trickery?
 			printf("after %s -> offset: %d (0x%x)\n", xasset_enum_to_string(asset.type).c_str(), br.cursor, br.cursor);
 
-			FILE* obj = 0;
-			fopen_s(&obj, "F:\\export\\xbox.obj", "w");
+//			FILE* obj = 0;
+//			fopen_s(&obj, "F:\\export\\xbox.obj", "w");
+			int num = 0;
 			for (int k = 0; k < cm.numStaticModels; ++k)
 			{
 				cStaticModel_s sm;
 				sm.read(br);
-				sm.display();
-				fprintf(obj, "v %f %f %f\n", sm.origin.x, sm.origin.y, sm.origin.z);
-//				getchar();
+				if (sm.xmodel == UINT_MAX)
+				{
+					++num;
+				}
 			}
-			fclose(obj);
+			printf("num=%d\n", num);
+			//read all? or count all -1/ff pointers and read that many?
+			for (int k = 0; k < cm.numStaticModels; ++k)
+			{
+				XModel xm;
+				xm.read(br);
+				for (int g = 0; g < 4; ++g) {
+					printf("Xmodel: %f %s\n", xm.lodInfo[g].dist, list.string(xm.lodInfo[g].filename).c_str());
+				}
+				getchar();
+			}
 			printf("after %s -> offset: %d (0x%x)\n", xasset_enum_to_string(asset.type).c_str(), br.cursor, br.cursor);
 #if 0
 			br.cursor = 0x58F3B98;
